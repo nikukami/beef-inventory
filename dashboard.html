@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>豚肉発注ダッシュボード</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;background:#f2f2f7;min-height:100vh;color:#1c1c1e}
+.header{background:#1A3A5C;color:white;padding:16px 20px;text-align:center;position:sticky;top:0;z-index:10}
+.header h1{font-size:18px;font-weight:700}
+.header .sub{font-size:12px;opacity:.7;margin-top:2px}
+.wrap{padding:16px;max-width:800px;margin:0 auto}
+.loading{text-align:center;padding:60px 20px}
+.loading-spinner{width:40px;height:40px;border:3px solid #e0e0e0;border-top-color:#185FA5;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:15px;color:#888}
+.status-bar{background:white;border-radius:14px;padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.company-badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.company-badge{padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600}
+.badge-done{background:#EAF3DE;color:#27500A}
+.badge-pending{background:#f2f2f7;color:#888}
+.table-card{background:white;border-radius:14px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.table-title{padding:14px 16px;font-size:15px;font-weight:700;border-bottom:1px solid #f2f2f7;display:flex;justify-content:space-between;align-items:center}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:500px}
+th{padding:10px 12px;text-align:center;font-size:12px;font-weight:700;color:#888;background:#f9f9f9;border-bottom:1px solid #f2f2f7;white-space:nowrap}
+th.part-col{text-align:left;min-width:80px}
+td{padding:12px;text-align:center;border-bottom:1px solid #f2f2f7;font-size:15px}
+td.part-name{text-align:left;font-weight:700}
+tr:last-child td{border-bottom:none}
+.price-cell{font-weight:600}
+.price-cell.cheapest{background:#EAF3DE;color:#27500A;border-radius:8px;font-weight:700}
+.price-cell.no-data{color:#ddd;font-size:13px}
+.price-diff{font-size:11px;color:#A32D2D;display:block}
+.select-btn{width:100%;padding:8px 4px;border:1.5px solid #ddd;border-radius:8px;background:white;font-size:13px;cursor:pointer;color:#1c1c1e;font-weight:500}
+.select-btn.selected{background:#185FA5;color:white;border-color:#185FA5;font-weight:700}
+.summary-card{background:white;border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.summary-title{font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.summary-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f2f2f7}
+.summary-row:last-child{border-bottom:none}
+.summary-part{font-weight:700;font-size:15px}
+.summary-right{text-align:right}
+.summary-company{color:#185FA5;font-weight:600;font-size:15px}
+.summary-price{font-size:12px;color:#888;margin-top:2px}
+.summary-none{color:#ddd;font-size:14px}
+.btn-confirm{width:100%;height:56px;background:#185FA5;color:white;border:none;border-radius:14px;font-size:18px;font-weight:700;cursor:pointer;margin-top:4px}
+.btn-confirm:active{opacity:.85}
+.btn-confirm:disabled{background:#aaa}
+.confirm-note{font-size:12px;color:#888;text-align:center;margin-top:10px;line-height:1.6}
+.done-screen{display:none;text-align:center;padding:40px 20px}
+.done-order{background:white;border-radius:14px;padding:16px;margin:20px 0;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.done-order-title{font-size:12px;font-weight:700;color:#888;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em}
+.done-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f2f2f7}
+.done-row:last-child{border-bottom:none}
+.done-part{font-weight:700}
+.done-right{text-align:right}
+.done-company{color:#185FA5;font-weight:600}
+.done-price{font-size:12px;color:#888;margin-top:2px}
+.empty-state{text-align:center;padding:40px 20px}
+.reload-btn{background:#f2f2f7;border:none;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;color:#185FA5;font-weight:600}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>豚肉 発注ダッシュボード</h1>
+  <div class="sub">今週の価格一覧・発注確定</div>
+</div>
+<div class="wrap">
+  <div class="loading" id="loading">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">データを読み込み中...</div>
+  </div>
+  <div id="main" style="display:none">
+    <div class="status-bar">
+      <div style="font-size:14px;font-weight:600">入力状況</div>
+      <button class="reload-btn" onclick="loadData()">🔄 最新に更新</button>
+    </div>
+    <div class="company-badges" id="company-badges"></div>
+    <div class="table-card">
+      <div class="table-title">価格比較（安い順）<span style="font-size:12px;color:#888;font-weight:400">タップして発注先を選択</span></div>
+      <div class="table-wrap"><table><thead id="table-head"></thead><tbody id="table-body"></tbody></table></div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-title">発注先サマリー</div>
+      <div id="summary-rows"></div>
+      <button class="btn-confirm" id="btn-confirm" onclick="confirmOrder()">発注確定して社員に送信</button>
+      <div class="confirm-note">確定すると西田・浜田にメールで発注内容が送信されます。</div>
+    </div>
+  </div>
+  <div class="empty-state" id="empty-state" style="display:none">
+    <div style="font-size:48px;margin-bottom:16px">📭</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:8px">今週の価格データがありません</div>
+    <div style="font-size:14px;color:#888;margin-bottom:16px">業者からの入力を待っています。</div>
+    <button class="reload-btn" onclick="loadData()">🔄 再読み込み</button>
+  </div>
+  <div class="done-screen" id="done-screen">
+    <div style="font-size:64px;margin-bottom:16px">✅</div>
+    <div style="font-size:22px;font-weight:700;color:#27500A;margin-bottom:8px">発注確定しました</div>
+    <div style="font-size:15px;color:#666;margin-bottom:4px">西田・浜田に発注内容をメールで送信しました。</div>
+    <div class="done-order"><div class="done-order-title">発注内容</div><div id="done-rows"></div></div>
+    <button class="reload-btn" style="margin-top:16px;font-size:14px;padding:10px 20px" onclick="location.reload()">ダッシュボードに戻る</button>
+  </div>
+</div>
+<script>
+const GAS_URL='https://script.google.com/macros/s/AKfycby7xNtGmJVGROcx9yLCDuzte9KAGhlU31yE01iHG6tXgy42MLtpvrQGePtnRBywnFWJtg/exec';
+const COMPANIES=['南九州食肉販売','西日本フード','ナンチクファクトリー'];
+const PARTS=['ロース','肩ロース','バラ','モモ'];
+const COMPANY_COLORS={'南九州食肉販売':'#185FA5','西日本フード':'#0F6E56','ナンチクファクトリー':'#993C1D'};
+let allPrices={},selected={},sessionId='';
+async function loadData(){
+  document.getElementById('loading').style.display='block';
+  document.getElementById('main').style.display='none';
+  document.getElementById('empty-state').style.display='none';
+  try{
+    const res=await fetch(GAS_URL+'?action=getWeekPrices&t='+Date.now());
+    const data=await res.json();
+    if(!data.prices||Object.keys(data.prices).length===0){
+      document.getElementById('loading').style.display='none';
+      document.getElementById('empty-state').style.display='block';
+      return;
+    }
+    allPrices=data.prices;sessionId=data.sessionId||'';
+    renderBadges();renderTable();updateSummary();
+    document.getElementById('loading').style.display='none';
+    document.getElementById('main').style.display='block';
+  }catch(e){
+    document.getElementById('loading').style.display='none';
+    document.getElementById('empty-state').style.display='block';
+  }
+}
+function renderBadges(){
+  const area=document.getElementById('company-badges');area.innerHTML='';
+  COMPANIES.forEach(company=>{
+    const hasData=allPrices[company]&&Object.keys(allPrices[company]).length>0;
+    const badge=document.createElement('span');
+    badge.className='company-badge '+(hasData?'badge-done':'badge-pending');
+    badge.textContent=(hasData?'✓ ':'⏳ ')+company;
+    area.appendChild(badge);
+  });
+}
+function renderTable(){
+  const thead=document.getElementById('table-head');
+  let hHtml='<tr><th class="part-col">パーツ</th>';
+  COMPANIES.forEach(c=>{hHtml+=`<th style="color:${COMPANY_COLORS[c]}">${c}</th>`;});
+  thead.innerHTML=hHtml+'</tr>';
+  const tbody=document.getElementById('table-body');tbody.innerHTML='';
+  PARTS.forEach(part=>{
+    const prices=[];
+    COMPANIES.forEach(company=>{const p=allPrices[company]&&allPrices[company][part];if(p&&p>0) prices.push(p);});
+    const minPrice=prices.length>0?Math.min(...prices):null;
+    const tr=document.createElement('tr');
+    let html=`<td class="part-name">${part}</td>`;
+    COMPANIES.forEach(company=>{
+      const p=allPrices[company]&&allPrices[company][part];
+      const isSel=selected[part]&&selected[part].company===company;
+      if(!p||p<=0){html+=`<td><span class="price-cell no-data">未入力</span></td>`;}
+      else{
+        const isCheapest=p===minPrice;
+        const diff=p-minPrice;
+        const diffText=diff>0?`<span class="price-diff">+${diff.toLocaleString()}円</span>`:'';
+        html+=`<td><button class="select-btn${isSel?' selected':''}" onclick="selectCompany('${part}','${company}',${p})">
+          <span class="price-cell${isCheapest?' cheapest':''}">${p.toLocaleString()}円</span>${diffText}</button></td>`;
+      }
+    });
+    tr.innerHTML=html;tbody.appendChild(tr);
+  });
+}
+function selectCompany(part,company,price){
+  if(selected[part]&&selected[part].company===company){delete selected[part];}
+  else{selected[part]={company,price};}
+  renderTable();updateSummary();
+}
+function updateSummary(){
+  let html='';
+  PARTS.forEach(part=>{
+    const sel=selected[part];
+    html+=`<div class="summary-row"><span class="summary-part">${part}</span>
+      ${sel?`<div class="summary-right"><div class="summary-company">${sel.company}</div><div class="summary-price">${sel.price.toLocaleString()}円/kg</div></div>`:`<span class="summary-none">未選択</span>`}</div>`;
+  });
+  document.getElementById('summary-rows').innerHTML=html;
+}
+async function confirmOrder(){
+  if(Object.keys(selected).length===0){alert('少なくとも1つのパーツの発注先を選択してください。');return;}
+  if(!confirm('発注内容を確定して社員にメールを送信しますか？')) return;
+  const btn=document.getElementById('btn-confirm');
+  btn.disabled=true;btn.textContent='送信中...';
+  try{
+    await fetch(GAS_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'submitOrderDirect',order:selected,prices:allPrices,sessionId})});
+    document.getElementById('main').style.display='none';
+    document.getElementById('done-screen').style.display='block';
+    let rows='';
+    PARTS.forEach(part=>{
+      const sel=selected[part];
+      rows+=`<div class="done-row"><span class="done-part">${part}</span>${sel?`<div class="done-right"><div class="done-company">${sel.company}</div><div class="done-price">${sel.price.toLocaleString()}円/kg</div></div>`:`<span style="color:#ddd">発注なし</span>`}</div>`;
+    });
+    document.getElementById('done-rows').innerHTML=rows;
+  }catch(e){
+    alert('送信に失敗しました。');btn.disabled=false;btn.textContent='発注確定して社員に送信';
+  }
+}
+loadData();
+</script>
+</body>
+</html>
