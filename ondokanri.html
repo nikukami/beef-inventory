@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="温度管理">
+<meta name="theme-color" content="#0f1117">
+<title>温度管理チェック</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg2: #1a1d27;
+    --bg3: #22263a;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.15);
+    --text: #f0f2ff;
+    --text2: #8b90a8;
+    --text3: #5a5f78;
+    --ok: #22c980;
+    --ok-bg: rgba(34,201,128,0.12);
+    --ok-border: rgba(34,201,128,0.35);
+    --ng: #ff5a5a;
+    --ng-bg: rgba(255,90,90,0.12);
+    --ng-border: rgba(255,90,90,0.35);
+    --blue: #4f8ef7;
+    --blue-bg: rgba(79,142,247,0.12);
+    --frozen: #4f8ef7;
+    --frozen-bg: rgba(79,142,247,0.15);
+    --chilled: #22c9b8;
+    --chilled-bg: rgba(34,201,184,0.15);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif; }
+  
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ── HEADER ── */
+  .header {
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 18px 12px;
+    position: sticky; top: 0; z-index: 20;
+    backdrop-filter: blur(12px);
+  }
+  .header-row { display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 17px; font-weight: 600; letter-spacing: 0.02em; }
+  .header-sub { font-size: 12px; color: var(--text2); margin-top: 3px; }
+  .back-btn {
+    background: none; border: 1px solid var(--border2); border-radius: 8px;
+    color: var(--text2); font-size: 13px; padding: 6px 12px; cursor: pointer;
+  }
+  .back-btn:active { opacity: 0.6; }
+
+  /* ── HOME ── */
+  .home-inner { flex: 1; padding: 24px 18px; }
+  .home-title { font-size: 13px; color: var(--text3); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 14px; }
+  .time-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 32px; }
+  .time-btn {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px 8px 16px; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  }
+  .time-btn:active { background: var(--bg3); border-color: var(--border2); }
+  .time-btn .time { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; color: var(--text); line-height: 1; }
+  .time-btn .label { font-size: 11px; color: var(--text2); margin-top: 5px; }
+
+  .recent-title { font-size: 13px; color: var(--text3); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px; }
+  .log-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 8px; font-size: 13px;
+  }
+  .log-item .log-left { color: var(--text2); }
+  .log-item .log-right { font-weight: 600; }
+  .log-item .log-right.ok { color: var(--ok); }
+  .log-item .log-right.ng { color: var(--ng); }
+  .no-log { font-size: 13px; color: var(--text3); padding: 12px 0; }
+
+  .gas-warning {
+    background: rgba(255,180,0,0.08); border: 1px solid rgba(255,180,0,0.25);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 24px; font-size: 12px; color: #f5c842; line-height: 1.6;
+  }
+
+  /* ── CHECK SCREEN ── */
+  .progress-wrap { padding: 12px 18px 10px; border-bottom: 1px solid var(--border); }
+  .progress-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--text2); margin-bottom: 7px; }
+  .progress-bar { height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--ok); border-radius: 2px; transition: width 0.3s ease; }
+  .hint { padding: 8px 18px; font-size: 11px; color: var(--text3); border-bottom: 1px solid var(--border); }
+
+  .list-wrap { flex: 1; padding: 10px 18px 120px; overflow-y: auto; }
+  .list-item {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 13px 14px; margin-bottom: 8px;
+    cursor: pointer; user-select: none; transition: all 0.12s;
+  }
+  .list-item:active { opacity: 0.75; }
+  .list-item.ok { background: var(--ok-bg); border-color: var(--ok-border); }
+  .list-item.ng { background: var(--ng-bg); border-color: var(--ng-border); }
+
+  .check-circle {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    border: 2px solid var(--border2); background: var(--bg3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700; transition: all 0.12s;
+  }
+  .list-item.ok .check-circle { background: var(--ok); border-color: var(--ok); color: #0f1117; }
+  .list-item.ng .check-circle { background: var(--ng); border-color: var(--ng); color: #fff; }
+
+  .item-info { flex: 1; min-width: 0; }
+  .item-name { font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  .list-item.ok .item-name { color: var(--ok); }
+  .list-item.ng .item-name { color: var(--ng); }
+  .tag {
+    font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 600;
+    line-height: 1.6; flex-shrink: 0;
+  }
+  .tag.frozen { background: var(--frozen-bg); color: var(--frozen); }
+  .tag.chilled { background: var(--chilled-bg); color: var(--chilled); }
+  .item-temp { font-size: 11px; color: var(--text3); margin-top: 3px; }
+  .list-item.ok .item-temp, .list-item.ng .item-temp { color: inherit; opacity: 0.7; }
+  .item-ng-note { font-size: 11px; color: var(--ng); margin-top: 3px; }
+  .item-status { font-size: 13px; font-weight: 700; color: var(--text3); min-width: 28px; text-align: right; }
+  .list-item.ok .item-status { color: var(--ok); }
+  .list-item.ng .item-status { color: var(--ng); }
+
+  /* NG panel */
+  .ng-panel {
+    background: #1e1218; border: 1px solid var(--ng-border);
+    border-radius: 12px; padding: 14px; margin: -4px 0 8px;
+  }
+  .ng-panel-title { font-size: 12px; color: var(--ng); font-weight: 600; margin-bottom: 10px; letter-spacing: 0.03em; }
+  .reason-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
+  .reason-btn {
+    padding: 9px 6px; border-radius: 8px; border: 1px solid var(--ng-border);
+    background: var(--ng-bg); color: var(--ng); font-size: 13px; cursor: pointer; text-align: center;
+  }
+  .reason-btn.selected { background: var(--ng); color: #fff; border-color: var(--ng); }
+  .reason-btn:active { opacity: 0.7; }
+  .ng-memo {
+    width: 100%; background: #140d10; border: 1px solid var(--ng-border);
+    border-radius: 8px; padding: 9px 11px; color: var(--text); font-size: 14px;
+    resize: none; outline: none; margin-bottom: 10px;
+    font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+  }
+  .ng-actions { display: flex; gap: 8px; }
+  .ng-confirm-btn {
+    flex: 1; padding: 11px; border-radius: 8px; border: none;
+    background: var(--ng); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .ng-cancel-btn {
+    flex: 1; padding: 11px; border-radius: 8px; border: 1px solid var(--border2);
+    background: var(--bg3); color: var(--text2); font-size: 14px; cursor: pointer;
+  }
+
+  /* submit bar */
+  .submit-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(transparent, var(--bg) 30%);
+    padding: 20px 18px 28px;
+  }
+  .submit-btn {
+    width: 100%; padding: 16px; border-radius: 14px; border: none;
+    background: var(--ok); color: #0a1a13; font-size: 16px; font-weight: 700;
+    cursor: pointer; letter-spacing: 0.02em; transition: opacity 0.15s;
+  }
+  .submit-btn:disabled { background: var(--bg3); color: var(--text3); cursor: default; }
+  .submit-btn:not(:disabled):active { opacity: 0.8; }
+
+  /* ── COMPLETE ── */
+  .complete-inner { flex: 1; padding: 32px 18px 40px; display: flex; flex-direction: column; align-items: center; }
+  .complete-badge {
+    width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 32px; font-weight: 700; margin-bottom: 18px;
+  }
+  .complete-badge.ok { background: var(--ok-bg); color: var(--ok); border: 2px solid var(--ok-border); }
+  .complete-badge.ng { background: var(--ng-bg); color: var(--ng); border: 2px solid var(--ng-border); }
+  .complete-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; text-align: center; }
+  .complete-sub { font-size: 14px; color: var(--text2); margin-bottom: 28px; text-align: center; }
+  .summary-card {
+    width: 100%; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px 18px; margin-bottom: 16px;
+  }
+  .summary-row { display: flex; justify-content: space-between; font-size: 14px; padding: 5px 0; }
+  .summary-row .s-label { color: var(--text2); }
+  .summary-row .s-val { font-weight: 600; }
+  .summary-row .s-val.ok { color: var(--ok); }
+  .summary-row .s-val.ng { color: var(--ng); }
+
+  .ng-report-card {
+    width: 100%; background: var(--ng-bg); border: 1px solid var(--ng-border);
+    border-radius: 14px; padding: 16px 18px; margin-bottom: 16px;
+  }
+  .ng-report-title { font-size: 12px; color: var(--ng); font-weight: 700; letter-spacing: 0.06em; margin-bottom: 12px; }
+  .ng-report-item { padding: 10px 0; border-top: 1px solid rgba(255,90,90,0.15); }
+  .ng-report-item:first-of-type { border-top: none; padding-top: 0; }
+  .ng-report-name { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .ng-report-detail { font-size: 12px; color: var(--ng); margin-bottom: 8px; }
+  .reported-check {
+    display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); cursor: pointer;
+  }
+  .reported-check input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--ok); }
+  .reported-check.done { color: var(--ok); font-weight: 600; }
+
+  .sheet-card {
+    width: 100%; background: var(--blue-bg); border: 1px solid rgba(79,142,247,0.3);
+    border-radius: 14px; padding: 14px 18px; margin-bottom: 20px;
+  }
+  .sheet-card-title { font-size: 12px; color: var(--blue); font-weight: 700; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .sheet-card-msg { font-size: 13px; color: var(--text2); line-height: 1.6; }
+  .sheet-card-msg.sending { color: var(--blue); }
+  .sheet-card-msg.success { color: var(--ok); }
+  .sheet-card-msg.error { color: var(--ng); }
+
+  .home-btn {
+    width: 100%; padding: 15px; border-radius: 14px; border: 1px solid var(--border2);
+    background: var(--bg2); color: var(--text); font-size: 16px; font-weight: 600; cursor: pointer;
+  }
+  .home-btn:active { opacity: 0.7; }
+
+  /* ── 記録画面 ── */
+  .history-btn {
+    width: 100%; padding: 13px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--bg2); color: var(--text2); font-size: 14px; font-weight: 500; cursor: pointer;
+    margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .history-btn:active { opacity: 0.7; }
+  .history-inner { flex: 1; padding: 12px 18px 40px; overflow-y: auto; }
+  .history-log {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 10px; cursor: pointer;
+  }
+  .history-log:active { opacity: 0.7; }
+  .history-log.has-ng { border-color: var(--ng-border); background: var(--ng-bg); }
+  .history-log-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .history-log-dt { font-size: 12px; color: var(--text3); }
+  .history-log-badge { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+  .history-log-badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .history-log-badge.ng { background: var(--ng-bg); color: var(--ng); }
+  .history-log-label { font-size: 15px; font-weight: 600; color: var(--text); }
+  .history-log-ng { font-size: 12px; color: var(--ng); margin-top: 4px; }
+  .history-empty { text-align: center; padding: 60px 20px; color: var(--text3); font-size: 14px; }
+  .history-loading { text-align: center; padding: 40px 20px; color: var(--text2); font-size: 14px; }
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+    z-index: 100; display: flex; align-items: flex-end;
+  }
+  .modal-sheet {
+    background: var(--bg2); border-radius: 20px 20px 0 0; width: 100%;
+    max-height: 82vh; overflow-y: auto; padding: 20px 18px 44px;
+  }
+  .modal-handle { width: 36px; height: 4px; background: var(--border2); border-radius: 2px; margin: 0 auto 16px; }
+  .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .modal-sub { font-size: 12px; color: var(--text2); margin-bottom: 16px; }
+  .modal-row {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 10px 0; border-top: 1px solid var(--border); font-size: 14px;
+  }
+  .modal-name { color: var(--text); flex: 1; }
+  .modal-tag { font-size: 10px; padding: 2px 6px; border-radius: 20px; font-weight: 600; margin-left: 6px; }
+  .modal-right { text-align: right; }
+  .modal-status { font-weight: 700; }
+  .modal-status.ok { color: var(--ok); }
+  .modal-status.ng { color: var(--ng); }
+  .modal-ng-note { font-size: 11px; color: var(--ng); margin-top: 2px; }
+  .modal-close {
+    width: 100%; margin-top: 16px; padding: 14px; border-radius: 12px;
+    border: 1px solid var(--border2); background: var(--bg3);
+    color: var(--text2); font-size: 15px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== HOME ===== -->
+<div id="screen-home" class="screen active">
+  <div class="header">
+    <div class="header-row">
+      <h1>🌡 温度管理チェック</h1>
+    </div>
+    <div class="header-sub" id="today-str"></div>
+  </div>
+  <div class="home-inner">
+    <div id="gas-warning" class="gas-warning" style="display:none">
+      ⚠ GAS_URLが未設定です。<br>index.html内の <code>GAS_URL</code> にGoogle Apps ScriptのURLを設定してください。
+    </div>
+    <div class="home-title">チェック時間帯</div>
+    <div class="time-grid">
+      <div class="time-btn" onclick="startCheck('朝','09:00')">
+        <div class="time">09:00</div>
+        <div class="label">朝チェック</div>
+      </div>
+      <div class="time-btn" onclick="startCheck('昼','14:00')">
+        <div class="time">14:00</div>
+        <div class="label">昼チェック</div>
+      </div>
+      <div class="time-btn" onclick="startCheck('夜','18:50')">
+        <div class="time">18:50</div>
+        <div class="label">夜チェック</div>
+      </div>
+    </div>
+    <div class="recent-title">最近の記録</div>
+    <div id="recent-list"></div>
+    <button class="history-btn" onclick="showHistory()">&#128203; 過去の記録をすべて見る</button>
+  </div>
+</div>
+
+<!-- ===== HISTORY ===== -->
+<div id="screen-history" class="screen">
+  <div class="header">
+    <div class="header-row">
+      <h1>過去の記録</h1>
+      <button class="back-btn" onclick="goHome()">← 戻る</button>
+    </div>
+    <div class="header-sub">スプレッドシートから読み込み</div>
+  </div>
+  <div class="history-inner" id="history-inner">
+    <div class="history-loading">読み込み中...</div>
+  </div>
+</div>
+
+<!-- モーダル -->
+<div id="modal-overlay" class="modal-overlay" style="display:none" onclick="closeModal()">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-sub" id="modal-sub"></div>
+    <div id="modal-body"></div>
+    <button class="modal-close" onclick="closeModal()">閉じる</button>
+  </div>
+</div>
+
+<!-- ===== CHECK ===== -->
+<div id="screen-check" class="screen">
+  <div class="header">
+    <div class="header-row">
+      <h1 id="check-header-title">朝チェック</h1>
+      <button class="back-btn" onclick="goHome()">← 戻る</button>
+    </div>
+    <div class="header-sub" id="check-header-sub"></div>
+  </div>
+  <div class="progress-wrap">
+    <div class="progress-meta">
+      <span>進捗</span>
+      <span id="progress-text">0 / 16</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+  </div>
+  <div class="hint">タップ → OK ／ 長押し → NG入力</div>
+  <div class="list-wrap" id="item-list"></div>
+  <div class="submit-bar">
+    <button class="submit-btn" id="submit-btn" disabled onclick="doComplete()">チェック完了・保存</button>
+  </div>
+</div>
+
+<!-- ===== COMPLETE ===== -->
+<div id="screen-complete" class="screen">
+  <div class="header">
+    <div class="header-row">
+      <h1>チェック完了</h1>
+      <button class="back-btn" onclick="goHome()">ホームへ</button>
+    </div>
+    <div class="header-sub" id="complete-header-sub"></div>
+  </div>
+  <div class="complete-inner">
+    <div class="complete-badge" id="complete-badge">✓</div>
+    <div class="complete-title" id="complete-title">全箇所 異常なし</div>
+    <div class="complete-sub" id="complete-sub">全16箇所の温度が正常範囲内でした。</div>
+    <div class="summary-card">
+      <div class="summary-row"><span class="s-label">日時</span><span class="s-val" id="sum-dt">-</span></div>
+      <div class="summary-row"><span class="s-label">チェック</span><span class="s-val" id="sum-label">-</span></div>
+      <div class="summary-row"><span class="s-label">OK</span><span class="s-val ok" id="sum-ok">-</span></div>
+      <div class="summary-row"><span class="s-label">NG</span><span class="s-val ng" id="sum-ng">-</span></div>
+    </div>
+    <div id="ng-report-block" style="width:100%"></div>
+    <div class="sheet-card" id="sheet-card">
+      <div class="sheet-card-title">📊 GOOGLE スプレッドシート</div>
+      <div class="sheet-card-msg" id="sheet-msg">送信中...</div>
+    </div>
+    <button class="home-btn" onclick="goHome()">ホームに戻る</button>
+  </div>
+</div>
+
+<script>
+// ========================================
+//  ★ ここにGASのURLを貼り付けてください ★
+// ========================================
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwkzo4dBZdPnga8ZfwXTzOSFsoqnKAugwcSEVCZPFyyGINmhpWr8rROXDj5jdIK1rQBsQ/exec';
+// 例: 'https://script.google.com/macros/s/AKfyc.../exec'
+
+// ── 管理庫データ ──
+const UNITS = [
+  {name:'リーチイン冷凍庫1',  limit:-18, type:'frozen'},
+  {name:'リーチイン冷凍庫2',  limit:-18, type:'frozen'},
+  {name:'リーチイン冷蔵庫',   limit:0,   type:'chilled'},
+  {name:'発送テーブル',       limit:-22, type:'frozen'},
+  {name:'黒豚テーブル',       limit:-5,  type:'frozen'},
+  {name:'白豚テーブル',       limit:-5,  type:'frozen'},
+  {name:'鶏テーブル',         limit:0,   type:'chilled'},
+  {name:'和牛テーブル',       limit:-5,  type:'frozen'},
+  {name:'豚ヒレテーブル',     limit:0,   type:'chilled'},
+  {name:'惣菜専用テーブル',   limit:-2,  type:'frozen'},
+  {name:'餃子テーブル',       limit:-1,  type:'frozen'},
+  {name:'惣菜冷蔵',           limit:0,   type:'chilled'},
+  {name:'裏冷凍',             limit:-22, type:'frozen'},
+  {name:'ヤマト冷凍',         limit:-18, type:'frozen'},
+  {name:'作業場冷凍',         limit:-20, type:'frozen'},
+  {name:'作業場冷蔵',         limit:-5,  type:'frozen'},
+];
+
+const NG_REASONS = ['温度異常','ドア開放','霜付き','機器不具合','その他'];
+
+let session = null;
+let logs = [];
+try { logs = JSON.parse(localStorage.getItem('tempLogs') || '[]'); } catch(e){}
+
+// 日付表示
+function fmtDate(d) {
+  const days = ['日','月','火','水','木','金','土'];
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
+}
+function fmtDT(d) {
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+document.getElementById('today-str').textContent = fmtDate(new Date());
+if (!GAS_URL) document.getElementById('gas-warning').style.display = 'block';
+
+// ── RECENT ──
+function renderRecent() {
+  const el = document.getElementById('recent-list');
+  if (!logs.length) { el.innerHTML = '<div class="no-log">まだ記録がありません</div>'; return; }
+  el.innerHTML = logs.slice(-5).reverse().map(l => {
+    const ng = l.results.filter(r => r.status === 'ng').length;
+    return `<div class="log-item">
+      <span class="log-left">${l.dt} ${l.timeLabel}</span>
+      <span class="log-right ${ng ? 'ng' : 'ok'}">${ng ? 'NG ' + ng + '件' : '全OK'}</span>
+    </div>`;
+  }).join('');
+}
+renderRecent();
+
+// ── START CHECK ──
+function startCheck(label, time) {
+  session = {
+    label, time,
+    timeLabel: label + 'チェック（' + time + '）',
+    dt: fmtDT(new Date()),
+    results: UNITS.map((u, i) => ({ id:i, status:'pending', reason:'', memo:'', reported:false }))
+  };
+  document.getElementById('check-header-title').textContent = session.timeLabel;
+  document.getElementById('check-header-sub').textContent = session.dt;
+  renderList();
+  show('screen-check');
+}
+
+// ── LONG PRESS（タッチ専用・スクロール誤作動防止）──
+let pressTimer = null;
+let longPressFired = false;
+let touchMoved = false;
+let touchStartY = 0;
+
+function onTouchStart(i) {
+  longPressFired = false;
+  touchMoved = false;
+  touchStartY = event.touches[0].clientY;
+  pressTimer = setTimeout(() => {
+    if (touchMoved) return;
+    longPressFired = true;
+    openNgPanel(i);
+  }, 600);
+}
+function onTouchEnd(i, e) {
+  if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+  if (longPressFired || touchMoved) { return; } // 長押し・スクロール後は無視
+  // 短タップ → OK切り替え
+  const r = session.results[i];
+  if (r.status === 'ng') return;
+  r.status = r.status === 'ok' ? 'pending' : 'ok';
+  closeAllNgPanels();
+  renderList();
+  e.preventDefault();
+}
+function onTouchMove() {
+  const deltaY = Math.abs(event.touches[0].clientY - touchStartY);
+  if (deltaY > 8) { // 8px以上動いたらスクロールと判定
+    touchMoved = true;
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+  }
+}
+
+function tapItem(i) {
+  // マウスクリック（PC確認用）のみ
+  const r = session.results[i];
+  if (r.status === 'ng') return;
+  r.status = r.status === 'ok' ? 'pending' : 'ok';
+  closeAllNgPanels();
+  renderList();
+}
+
+// ── NG PANEL ──
+let openNgIdx = -1;
+
+function openNgPanel(i) {
+  openNgIdx = i;
+  session.results[i].status = 'ng';
+  renderList();
+  // scroll into view
+  setTimeout(() => {
+    const panel = document.getElementById('ng-panel-' + i);
+    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 80);
+}
+
+function closeAllNgPanels() { openNgIdx = -1; }
+
+function selectReason(i, r) {
+  session.results[i].reason = r;
+  document.querySelectorAll('#ng-btns-' + i + ' .reason-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.reason === r);
+  });
+}
+
+function confirmNg(i) {
+  const memo = document.getElementById('ng-memo-' + i);
+  if (memo) session.results[i].memo = memo.value.trim();
+  openNgIdx = -1;
+  renderList();
+}
+
+function cancelNg(i) {
+  session.results[i].status = 'pending';
+  session.results[i].reason = '';
+  session.results[i].memo = '';
+  openNgIdx = -1;
+  renderList();
+}
+
+// ── RENDER LIST ──
+function renderList() {
+  const el = document.getElementById('item-list');
+  let html = '';
+  UNITS.forEach((u, i) => {
+    const r = session.results[i];
+    const cls = r.status === 'ok' ? 'ok' : r.status === 'ng' ? 'ng' : '';
+    const icon = r.status === 'ok' ? '✓' : r.status === 'ng' ? '!' : '';
+    const tagCls = u.type === 'frozen' ? 'frozen' : 'chilled';
+    const tagLabel = u.type === 'frozen' ? '冷凍' : '冷蔵';
+    const ngNote = r.status === 'ng' && r.reason ? `<div class="item-ng-note">${r.reason}${r.memo ? ' / ' + r.memo : ''}</div>` : '';
+
+    html += `<div class="list-item ${cls}" id="item-${i}"
+      ontouchstart="onTouchStart(${i})"
+      ontouchend="onTouchEnd(${i}, event)"
+      ontouchmove="onTouchMove()"
+      onclick="tapItem(${i})">
+      <div class="check-circle">${icon}</div>
+      <div class="item-info">
+        <div class="item-name">${u.name}<span class="tag ${tagCls}">${tagLabel}</span></div>
+        <div class="item-temp">設定 ${u.limit}℃以下</div>
+        ${ngNote}
+      </div>
+      <div class="item-status">${r.status === 'ok' ? 'OK' : r.status === 'ng' ? 'NG' : ''}</div>
+    </div>`;
+
+    if (openNgIdx === i) {
+      html += `<div class="ng-panel" id="ng-panel-${i}">
+        <div class="ng-panel-title">⚠ NGの理由 — ${u.name}</div>
+        <div class="reason-grid" id="ng-btns-${i}">
+          ${NG_REASONS.map(rn => `<div class="reason-btn${r.reason === rn ? ' selected' : ''}" data-reason="${rn}" onclick="event.stopPropagation();selectReason(${i},'${rn}')">${rn}</div>`).join('')}
+        </div>
+        <textarea class="ng-memo" id="ng-memo-${i}" rows="2" placeholder="メモ（任意）">${r.memo || ''}</textarea>
+        <div class="ng-actions">
+          <button class="ng-confirm-btn" onclick="event.stopPropagation();confirmNg(${i})">NG確定</button>
+          <button class="ng-cancel-btn" onclick="event.stopPropagation();cancelNg(${i})">キャンセル</button>
+        </div>
+      </div>`;
+    }
+  });
+  el.innerHTML = html;
+  updateProgress();
+}
+
+function updateProgress() {
+  const done = session.results.filter(r => r.status !== 'pending').length;
+  const total = UNITS.length;
+  document.getElementById('progress-text').textContent = done + ' / ' + total;
+  document.getElementById('progress-fill').style.width = (done / total * 100) + '%';
+  document.getElementById('submit-btn').disabled = done < total;
+}
+
+// ── COMPLETE ──
+function doComplete() {
+  const ok = session.results.filter(r => r.status === 'ok').length;
+  const ng = session.results.filter(r => r.status === 'ng').length;
+  const dt = fmtDT(new Date());
+
+  document.getElementById('complete-header-sub').textContent = dt;
+  document.getElementById('sum-dt').textContent = dt;
+  document.getElementById('sum-label').textContent = session.timeLabel;
+  document.getElementById('sum-ok').textContent = ok + '箇所';
+  document.getElementById('sum-ng').textContent = ng ? ng + '箇所' : 'なし';
+
+  const badge = document.getElementById('complete-badge');
+  badge.textContent = ng ? '!' : '✓';
+  badge.className = 'complete-badge ' + (ng ? 'ng' : 'ok');
+  document.getElementById('complete-title').textContent = ng ? ng + '箇所でNG検出' : '全箇所 異常なし';
+  document.getElementById('complete-sub').textContent = ng
+    ? '下記の箇所を確認し、社長への報告をしてください。'
+    : '全16箇所の温度が正常範囲内でした。';
+
+  // NG report block
+  const ngResults = session.results.filter(r => r.status === 'ng');
+  const ngBlock = document.getElementById('ng-report-block');
+  if (ngResults.length) {
+    ngBlock.innerHTML = `<div class="ng-report-card">
+      <div class="ng-report-title">NG箇所 — 社長報告チェック</div>
+      ${ngResults.map(r => `<div class="ng-report-item">
+        <div class="ng-report-name">${UNITS[r.id].name}</div>
+        <div class="ng-report-detail">${r.reason || '理由未入力'}${r.memo ? ' / ' + r.memo : ''}</div>
+        <label class="reported-check" id="rep-label-${r.id}">
+          <input type="checkbox" onchange="markReported(${r.id}, this.checked)"> 社長に報告済み
+        </label>
+      </div>`).join('')}
+    </div>`;
+  } else {
+    ngBlock.innerHTML = '';
+  }
+
+  // save log
+  const logEntry = {
+    dt, timeLabel: session.timeLabel,
+    results: session.results.map((r, i) => ({ ...r, unitName: UNITS[i].name }))
+  };
+  logs.push(logEntry);
+  if (logs.length > 60) logs = logs.slice(-60);
+  try { localStorage.setItem('tempLogs', JSON.stringify(logs)); } catch(e) {}
+
+  show('screen-complete');
+  sendToSheet(logEntry, ok, ng);
+}
+
+function markReported(id, checked) {
+  session.results[id].reported = checked;
+  const label = document.getElementById('rep-label-' + id);
+  if (label) label.className = 'reported-check' + (checked ? ' done' : '');
+}
+
+// ── GAS SEND ──
+async function sendToSheet(log, ok, ng) {
+  const msgEl = document.getElementById('sheet-msg');
+  if (!GAS_URL) {
+    msgEl.className = 'sheet-card-msg error';
+    msgEl.textContent = '⚠ GAS_URLが未設定のため保存されませんでした。';
+    return;
+  }
+  msgEl.className = 'sheet-card-msg sending';
+  msgEl.textContent = 'スプレッドシートに送信中...';
+
+  const payload = {
+    dt: log.dt,
+    timeLabel: log.timeLabel,
+    okCount: ok,
+    ngCount: ng,
+    details: UNITS.map((u, i) => {
+      const r = log.results[i];
+      return {
+        name: u.name,
+        type: u.type,
+        limit: u.limit,
+        status: r.status,
+        reason: r.reason || '',
+        memo: r.memo || ''
+      };
+    })
+  };
+
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    msgEl.className = 'sheet-card-msg success';
+    msgEl.textContent = '✓ スプレッドシートに保存しました。';
+  } catch(e) {
+    msgEl.className = 'sheet-card-msg error';
+    msgEl.textContent = '⚠ 送信エラー。ネットワークを確認してください。';
+  }
+}
+
+// ── HELPERS ──
+function goHome() {
+  session = null;
+  openNgIdx = -1;
+  renderRecent();
+  show('screen-home');
+}
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ── HISTORY ──
+let historyData = null;
+
+async function showHistory() {
+  show('screen-history');
+  const el = document.getElementById('history-inner');
+  el.innerHTML = '<div class="history-loading">スプレッドシートから読み込み中...</div>';
+
+  if (!GAS_URL) {
+    el.innerHTML = '<div class="history-empty">GAS_URLが未設定です</div>';
+    return;
+  }
+
+  try {
+    const res = await fetch(GAS_URL + '?action=getLogs', { mode: 'cors' });
+    const data = await res.json();
+    historyData = data;
+    renderHistory(data);
+  } catch(e) {
+    el.innerHTML = '<div class="history-empty">⚠ 読み込みに失敗しました。<br>ネットワークを確認してください。</div>';
+  }
+}
+
+function renderHistory(data) {
+  const el = document.getElementById('history-inner');
+  if (!data.logs || data.logs.length === 0) {
+    el.innerHTML = '<div class="history-empty">まだ記録がありません</div>';
+    return;
+  }
+  el.innerHTML = data.logs.map((l, i) => {
+    const hasNg = l.ngCount > 0;
+    return `<div class="history-log ${hasNg ? 'has-ng' : ''}" onclick="openModal(${i})">
+      <div class="history-log-top">
+        <span class="history-log-dt">${l.dt}</span>
+        <span class="history-log-badge ${hasNg ? 'ng' : 'ok'}">${hasNg ? 'NG ' + l.ngCount + '件' : '全OK'}</span>
+      </div>
+      <div class="history-log-label">${l.timeLabel}</div>
+      ${hasNg ? `<div class="history-log-ng">${l.ngList}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function openModal(i) {
+  if (!historyData || !historyData.logs[i]) return;
+  const log = historyData.logs[i];
+  const dt = typeof log.dt === 'object' ? log.dt.toString() : log.dt;
+
+  document.getElementById('modal-title').textContent = log.timeLabel;
+  document.getElementById('modal-sub').textContent = dt + '　OK: ' + log.okCount + '件　NG: ' + log.ngCount + '件';
+
+  // この日時の詳細を抽出
+  const details = historyData.details
+    ? historyData.details.filter(d => {
+        const ddt = typeof d.dt === 'object' ? d.dt.toString() : d.dt;
+        const ldt = typeof log.dt === 'object' ? log.dt.toString() : log.dt;
+        return ddt === ldt && d.timeLabel === log.timeLabel;
+      })
+    : [];
+
+  if (details.length > 0) {
+    document.getElementById('modal-body').innerHTML = details.map(d => {
+      const isNg = d.status === 'NG';
+      const tagCls = d.type === '冷凍' ? 'frozen' : 'chilled';
+      return `<div class="modal-row">
+        <span class="modal-name">${d.name}<span class="tag ${tagCls}">${d.type}</span></span>
+        <span class="modal-right">
+          <span class="modal-status ${isNg ? 'ng' : 'ok'}">${d.status}</span>
+          ${isNg && d.reason ? `<div class="modal-ng-note">${d.reason}${d.memo ? ' / ' + d.memo : ''}</div>` : ''}
+        </span>
+      </div>`;
+    }).join('');
+  } else {
+    document.getElementById('modal-body').innerHTML =
+      '<div style="color:var(--text3);font-size:13px;padding:12px 0">詳細データなし（OK: ' + log.okCount + '件 / NG: ' + log.ngCount + '件）</div>';
+  }
+
+  document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+}
+</script>
+</body>
+</html>
