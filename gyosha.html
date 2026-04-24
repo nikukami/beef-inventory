@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>豚肉価格入力</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;background:#f2f2f7;min-height:100vh;color:#1c1c1e}
+.header{color:white;padding:16px 20px;text-align:center;position:sticky;top:0;z-index:10}
+.header h1{font-size:18px;font-weight:700}
+.header .sub{font-size:12px;opacity:.8;margin-top:2px}
+.wrap{padding:16px;max-width:500px;margin:0 auto}
+.welcome-card{background:white;border-radius:16px;padding:24px;text-align:center;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.company-icon{font-size:48px;margin-bottom:12px}
+.welcome-title{font-size:20px;font-weight:700;margin-bottom:6px}
+.welcome-sub{font-size:14px;color:#888;line-height:1.6}
+.week-label{text-align:center;font-size:13px;color:#666;margin-bottom:14px;background:white;padding:10px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.part-card{background:white;border-radius:14px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.part-header{padding:14px 16px;font-size:16px;font-weight:700;border-bottom:1px solid #f2f2f7}
+.part-body{padding:14px 16px;display:flex;align-items:center;gap:10px}
+.price-input{flex:1;height:52px;border:1.5px solid #ddd;border-radius:10px;font-size:22px;text-align:right;padding:0 12px;color:#1c1c1e;background:white;-webkit-appearance:none}
+.price-input:focus{outline:none;border-width:2px}
+.price-unit{font-size:14px;color:#888;white-space:nowrap;font-weight:500}
+.submit-card{background:white;border-radius:14px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.submit-note{font-size:13px;color:#888;text-align:center;margin-bottom:14px;line-height:1.6}
+.btn-submit{width:100%;height:56px;color:white;border:none;border-radius:14px;font-size:18px;font-weight:700;cursor:pointer}
+.btn-submit:active{opacity:.85}
+.btn-submit:disabled{background:#aaa!important;cursor:not-allowed}
+.done-screen{display:none;text-align:center;padding:40px 20px}
+.done-icon{font-size:72px;margin-bottom:16px}
+.done-title{font-size:22px;font-weight:700;margin-bottom:10px}
+.done-sub{font-size:15px;color:#666;line-height:1.8}
+.done-detail{background:white;border-radius:14px;padding:16px;margin:20px 0;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.done-detail-title{font-size:12px;font-weight:700;color:#888;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em}
+.done-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f2f2f7;font-size:15px}
+.done-row:last-child{border-bottom:none}
+.done-part{color:#888}
+.done-price{font-weight:700}
+.error-screen{display:none;text-align:center;padding:60px 20px}
+.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#1c1c1e;color:white;padding:12px 24px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .3s;z-index:100;white-space:nowrap}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="header" id="page-header">
+  <h1 id="header-title">豚肉 週次価格入力</h1>
+  <div class="sub" id="header-sub">価格を入力してください</div>
+</div>
+<div class="wrap" id="main-wrap">
+  <div class="welcome-card">
+    <div class="company-icon">🏢</div>
+    <div class="welcome-title" id="company-display">読み込み中...</div>
+    <div class="welcome-sub">今週のパーツ単価を入力して<br>送信ボタンを押してください</div>
+  </div>
+  <div class="week-label" id="week-label"></div>
+  <div id="parts-area"></div>
+  <div class="submit-card">
+    <div class="submit-note">未入力のパーツがあっても送信できます。</div>
+    <button class="btn-submit" id="btn-submit" onclick="submitPrices()">送信する</button>
+  </div>
+</div>
+<div class="done-screen" id="done-screen">
+  <div class="done-icon">✅</div>
+  <div class="done-title">送信完了しました</div>
+  <div class="done-sub">価格情報を送信しました。<br>ありがとうございます。</div>
+  <div class="done-detail">
+    <div class="done-detail-title">送信内容</div>
+    <div id="done-rows"></div>
+  </div>
+</div>
+<div class="error-screen" id="error-screen">
+  <div style="font-size:48px;margin-bottom:16px">⚠️</div>
+  <div style="font-size:18px;font-weight:700;color:#A32D2D;margin-bottom:8px">URLが正しくありません</div>
+  <div style="font-size:14px;color:#888">担当者から正しいURLをお知らせします。</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const GAS_URL='https://script.google.com/macros/s/AKfycby7xNtGmJVGROcx9yLCDuzte9KAGhlU31yE01iHG6tXgy42MLtpvrQGePtnRBywnFWJtg/exec';
+const PARTS=['ロース','肩ロース','バラ','モモ'];
+const COMPANY_COLORS={'南九州食肉販売':'#185FA5','西日本フード':'#0F6E56','ナンチクファクトリー':'#993C1D'};
+let companyName='';
+function init(){
+  const params=new URLSearchParams(window.location.search);
+  const company=params.get('company');
+  if(!company||!COMPANY_COLORS[company]){
+    document.getElementById('main-wrap').style.display='none';
+    document.getElementById('error-screen').style.display='block';
+    return;
+  }
+  companyName=company;
+  const color=COMPANY_COLORS[company];
+  document.getElementById('page-header').style.background=color;
+  document.getElementById('company-display').textContent=company;
+  document.getElementById('header-sub').textContent=company+' 様';
+  document.querySelector('.btn-submit').style.background=color;
+  const now=new Date();
+  const y=now.getFullYear(),m=(now.getMonth()+1).toString().padStart(2,'0'),d=now.getDate().toString().padStart(2,'0');
+  document.getElementById('week-label').textContent=y+'年'+m+'月'+d+'日（今週）の単価';
+  const area=document.getElementById('parts-area');
+  PARTS.forEach(part=>{
+    const card=document.createElement('div');
+    card.className='part-card';
+    card.innerHTML=`<div class="part-header" style="border-left:4px solid ${color}">${part}</div>
+      <div class="part-body">
+        <input class="price-input" type="number" id="price_${part}" placeholder="0" inputmode="numeric" min="0" step="1" style="border-color:${color}20">
+        <span class="price-unit">円 / kg</span>
+      </div>`;
+    area.appendChild(card);
+  });
+}
+async function submitPrices(){
+  const prices={};let count=0;
+  PARTS.forEach(part=>{
+    const val=document.getElementById('price_'+part).value;
+    if(val&&parseFloat(val)>0){prices[part]=parseFloat(val);count++;}
+  });
+  if(count===0){showToast('少なくとも1つ価格を入力してください');return;}
+  const btn=document.getElementById('btn-submit');
+  btn.disabled=true;btn.textContent='送信中...';
+  try{
+    await fetch(GAS_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'submitPrices',prices:{[companyName]:prices},staffName:companyName,staffEmail:'',isGyosha:true})});
+  }catch(e){}
+  document.getElementById('main-wrap').style.display='none';
+  document.getElementById('done-screen').style.display='block';
+  let rows='';
+  PARTS.forEach(part=>{
+    const p=prices[part];
+    rows+=`<div class="done-row"><span class="done-part">${part}</span><span class="done-price">${p?p.toLocaleString()+'円/kg':'未入力'}</span></div>`;
+  });
+  document.getElementById('done-rows').innerHTML=rows;
+}
+function showToast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),3000);
+}
+init();
+</script>
+</body>
+</html>
